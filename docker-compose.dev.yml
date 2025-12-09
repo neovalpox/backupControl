@@ -1,0 +1,78 @@
+version: '3.8'
+
+# Docker Compose configuration for DEVELOPMENT
+# This configuration does NOT use SSL and exposes ports for debugging
+
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: backupcontrol-db-dev
+    environment:
+      POSTGRES_USER: ${DB_USER:-backupcontrol}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-backupcontrol_dev_pass}
+      POSTGRES_DB: ${DB_NAME:-backupcontrol}
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-backupcontrol}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backupcontrol-backend-dev
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${DB_USER:-backupcontrol}:${DB_PASSWORD:-backupcontrol_dev_pass}@db:5432/${DB_NAME:-backupcontrol}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production}
+      - AI_PROVIDER=${AI_PROVIDER:-anthropic}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - EMAIL_PROVIDER=${EMAIL_PROVIDER:-imap}
+      - EMAIL_HOST=${EMAIL_HOST:-}
+      - EMAIL_PORT=${EMAIL_PORT:-993}
+      - EMAIL_USERNAME=${EMAIL_USERNAME:-}
+      - EMAIL_PASSWORD=${EMAIL_PASSWORD:-}
+      - DEBUG=true
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
+
+  # React Frontend (Development with HMR)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: backupcontrol-frontend-dev
+    environment:
+      - VITE_API_URL=http://192.168.10.250:8000/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    command: npm run dev -- --host 0.0.0.0
+    restart: unless-stopped
+
+volumes:
+  postgres_data_dev:
+
+networks:
+  default:
+    name: backupcontrol-dev
