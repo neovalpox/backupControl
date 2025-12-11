@@ -102,10 +102,10 @@ export default function Alerts() {
   };
 
   // Count by severity
-  const criticalCount = alerts.filter(a => a.severity === 'critical' && !a.resolved_at).length;
-  const highCount = alerts.filter(a => a.severity === 'high' && !a.resolved_at).length;
-  const mediumCount = alerts.filter(a => a.severity === 'medium' && !a.resolved_at).length;
-  const lowCount = alerts.filter(a => a.severity === 'low' && !a.resolved_at).length;
+  const criticalCount = alerts.filter(a => a.severity === 'critical' && !a.is_resolved).length;
+  const highCount = alerts.filter(a => a.severity === 'high' && !a.is_resolved).length;
+  const mediumCount = alerts.filter(a => a.severity === 'medium' && !a.is_resolved).length;
+  const lowCount = alerts.filter(a => a.severity === 'low' && !a.is_resolved).length;
 
   if (loading) {
     return (
@@ -209,7 +209,7 @@ export default function Alerts() {
             <div
               key={alert.id}
               className={`bg-gray-800 rounded-xl border border-gray-700 border-l-4 ${getSeverityColor(alert.severity)} ${
-                alert.resolved_at ? 'opacity-60' : ''
+                alert.is_resolved ? 'opacity-60' : ''
               }`}
             >
               <div className="p-6">
@@ -218,7 +218,7 @@ export default function Alerts() {
                     <div className="mt-1">{getSeverityIcon(alert.severity)}</div>
                     <div>
                       <h3 className="text-lg font-semibold text-white">{alert.title}</h3>
-                      <p className="text-gray-400 mt-1">{alert.description}</p>
+                      <p className="text-gray-400 mt-1">{alert.message}</p>
                       <div className="flex items-center space-x-4 mt-3 text-sm">
                         {alert.client_name && (
                           <span className="text-gray-500">
@@ -238,7 +238,7 @@ export default function Alerts() {
                   </div>
 
                   <div className="flex items-center space-x-2">
-                    {!alert.acknowledged_at && !alert.resolved_at && (
+                    {!alert.is_acknowledged && !alert.is_resolved && (
                       <button
                         onClick={() => handleAcknowledge(alert.id)}
                         className="p-2 bg-blue-500/20 text-blue-500 hover:bg-blue-500/30 rounded-lg transition-colors"
@@ -247,7 +247,7 @@ export default function Alerts() {
                         <CheckIcon className="w-5 h-5" />
                       </button>
                     )}
-                    {!alert.resolved_at && (
+                    {!alert.is_resolved && (
                       <button
                         onClick={() => handleResolve(alert.id)}
                         className="p-2 bg-green-500/20 text-green-500 hover:bg-green-500/30 rounded-lg transition-colors"
@@ -272,12 +272,12 @@ export default function Alerts() {
                   }`}>
                     {t(`alerts.${alert.severity}`)}
                   </span>
-                  {alert.acknowledged_at && (
+                  {alert.is_acknowledged && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-500">
                       {t('alerts.acknowledged')}
                     </span>
                   )}
-                  {alert.resolved_at && (
+                  {alert.is_resolved && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-500">
                       {t('alerts.resolved')}
                     </span>

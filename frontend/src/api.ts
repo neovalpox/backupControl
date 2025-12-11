@@ -109,14 +109,53 @@ export const dashboardApi = {
   },
 };
 
+// Client types
+export interface Client {
+  id: number;
+  name: string;
+  short_name: string;
+  description?: string;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string;
+  contract_type?: string;
+  sla_hours: number;
+  email_patterns: string[];
+  nas_identifiers: string[];
+  nas_identifier?: string; // Legacy
+  email_pattern?: string; // Legacy
+  notes?: string;
+  custom_alert_thresholds?: Record<string, any>;
+  is_active: boolean;
+  created_at: string;
+  updated_at?: string;
+  backups_count: number;
+  backups_ok: number;
+  backups_warning: number;
+  backups_critical: number;
+  last_backup_status: string;
+}
+
+export interface ClientBackup {
+  id: number;
+  name: string;
+  backup_type: string;
+  current_status: string;
+  last_success_at?: string;
+}
+
+export interface ClientDetail extends Client {
+  backups: ClientBackup[];
+}
+
 // Clients API
 export const clientsApi = {
-  getAll: async () => {
+  getAll: async (): Promise<Client[]> => {
     const response = await api.get('/clients/');
     return response.data;
   },
 
-  getById: async (id: number) => {
+  getById: async (id: number): Promise<ClientDetail> => {
     const response = await api.get(`/clients/${id}`);
     return response.data;
   },
@@ -142,24 +181,64 @@ export const clientsApi = {
   },
 };
 
+// Backup types
+export interface Backup {
+  id: number;
+  name: string;
+  backup_type: string;
+  source_nas?: string;
+  source_device?: string;
+  destination?: string;
+  destination_nas?: string;
+  expected_schedule?: string;
+  expected_hour?: number;
+  email_patterns: string[];
+  notes?: string;
+  client_id: number;
+  client_name: string;
+  current_status: string;
+  last_success_at?: string;
+  last_failure_at?: string;
+  last_event_at?: string;
+  total_success_count: number;
+  total_failure_count: number;
+  last_size_bytes?: number;
+  last_duration_seconds?: number;
+  last_error_message?: string;
+  is_active: boolean;
+  is_maintenance: boolean;
+  maintenance_until?: string;
+  maintenance_reason?: string;
+  created_at: string;
+}
+
+export interface BackupEvent {
+  id: number;
+  event_type: string;
+  event_date: string;
+  duration_seconds?: number;
+  transferred_size_bytes?: number;
+  error_message?: string;
+}
+
 // Backups API
 export const backupsApi = {
-  getAll: async (params?: any) => {
+  getAll: async (params?: any): Promise<Backup[]> => {
     const response = await api.get('/backups/', { params });
     return response.data;
   },
 
-  getById: async (id: number) => {
+  getById: async (id: number): Promise<Backup> => {
     const response = await api.get(`/backups/${id}`);
     return response.data;
   },
 
-  create: async (data: any) => {
+  create: async (data: any): Promise<Backup> => {
     const response = await api.post('/backups/', data);
     return response.data;
   },
 
-  update: async (id: number, data: any) => {
+  update: async (id: number, data: any): Promise<Backup> => {
     const response = await api.put(`/backups/${id}`, data);
     return response.data;
   },
@@ -169,21 +248,54 @@ export const backupsApi = {
     return response.data;
   },
 
-  getHistory: async (id: number, limit = 30) => {
-    const response = await api.get(`/backups/${id}/history?limit=${limit}`);
+  getEvents: async (id: number, limit = 50): Promise<BackupEvent[]> => {
+    const response = await api.get(`/backups/${id}/events?limit=${limit}`);
     return response.data;
   },
 
-  addHistory: async (id: number, data: any) => {
-    const response = await api.post(`/backups/${id}/history`, data);
+  setMaintenance: async (id: number, enabled: boolean, reason?: string) => {
+    const response = await api.put(`/backups/${id}/maintenance`, { 
+      is_maintenance: enabled,
+      maintenance_reason: reason 
+    });
+    return response.data;
+  },
+
+  getStats: async () => {
+    const response = await api.get('/backups/stats');
+    return response.data;
+  },
+
+  exportCsv: async (params?: any) => {
+    const response = await api.get('/backups/export', { 
+      params,
+      responseType: 'blob' 
+    });
     return response.data;
   },
 };
 
+// Types
+export interface Alert {
+  id: number;
+  alert_type: string;
+  severity: string;
+  title: string;
+  message?: string;
+  client_id?: number;
+  client_name?: string;
+  backup_id?: number;
+  backup_name?: string;
+  is_acknowledged: boolean;
+  is_resolved: boolean;
+  created_at?: string;
+  resolved_at?: string;
+}
+
 // Alerts API
 export const alertsApi = {
   getAll: async (params?: any) => {
-    const response = await api.get('/alerts/', { params });
+    const response = await api.get('/alerts', { params });
     return response.data;
   },
 
@@ -192,19 +304,68 @@ export const alertsApi = {
     return response.data;
   },
 
+  getCount: async () => {
+    const response = await api.get('/alerts/count');
+    return response.data;
+  },
+
+  getSummary: async () => {
+    const response = await api.get('/alerts/summary');
+    return response.data;
+  },
+
   acknowledge: async (id: number) => {
-    const response = await api.patch(`/alerts/${id}/acknowledge`);
+    const response = await api.put(`/alerts/${id}/acknowledge`);
     return response.data;
   },
 
   resolve: async (id: number) => {
-    const response = await api.patch(`/alerts/${id}/resolve`);
+    const response = await api.put(`/alerts/${id}/resolve`);
+    return response.data;
+  },
+
+  batchResolve: async (ids: number[]) => {
+    const response = await api.put('/alerts/batch/resolve', ids);
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    const response = await api.delete(`/alerts/${id}`);
+    return response.data;
+  },
+
+  generateFromBackups: async () => {
+    const response = await api.post('/alerts/generate-from-backups');
     return response.data;
   },
 };
 
 // Emails API
 export const emailsApi = {
+  // Liste tous les emails
+  getAll: async () => {
+    const response = await api.get('/emails/');
+    return response.data;
+  },
+
+  // Détail d'un email
+  getById: async (id: number) => {
+    const response = await api.get(`/emails/${id}`);
+    return response.data;
+  },
+
+  // Récupérer les nouveaux emails
+  fetchNew: async () => {
+    const response = await api.post('/emails/fetch');
+    return response.data;
+  },
+
+  // Analyser tous les emails non analysés
+  analyzeAll: async () => {
+    const response = await api.post('/emails/analyze');
+    return response.data;
+  },
+
   getSettings: async () => {
     const response = await api.get('/email/settings');
     return response.data;
@@ -361,6 +522,19 @@ export const usersApi = {
 
   changePassword: async (id: number, data: { current_password: string; new_password: string }) => {
     const response = await api.put(`/users/${id}/password`, data);
+    return response.data;
+  },
+};
+
+// Notifications API
+export const notificationsApi = {
+  test: async (channel: string) => {
+    const response = await api.post(`/notifications/test/${channel}`);
+    return response.data;
+  },
+
+  sendReport: async () => {
+    const response = await api.post('/notifications/report');
     return response.data;
   },
 };

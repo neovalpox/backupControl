@@ -3,7 +3,7 @@ Routes de gestion des sauvegardes
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, and_
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -63,6 +63,7 @@ class BackupResponse(BackupBase):
     total_failure_count: int
     last_size_bytes: Optional[float]
     last_duration_seconds: Optional[int]
+    last_error_message: Optional[str] = None
     is_active: bool
     is_maintenance: bool
     maintenance_until: Optional[datetime]
@@ -115,6 +116,24 @@ async def list_backups(
     result = await db.execute(query)
     rows = result.all()
     
+    # Recuperer les derniers messages d'erreur pour les backups en echec
+    backup_ids = [backup.id for backup, _ in rows]
+    last_errors = {}
+    if backup_ids:
+        # Subquery pour trouver le dernier evenement en echec par backup
+        error_query = select(BackupEvent).where(
+            and_(
+                BackupEvent.backup_id.in_(backup_ids),
+                BackupEvent.event_type.in_(['failed', 'failure', 'error']),
+                BackupEvent.error_message.isnot(None)
+            )
+        ).order_by(BackupEvent.event_date.desc())
+        error_result = await db.execute(error_query)
+        error_events = error_result.scalars().all()
+        for event in error_events:
+            if event.backup_id not in last_errors:
+                last_errors[event.backup_id] = event.error_message
+    
     return [
         BackupResponse(
             id=backup.id,
@@ -138,6 +157,7 @@ async def list_backups(
             total_failure_count=backup.total_failure_count,
             last_size_bytes=backup.last_size_bytes,
             last_duration_seconds=backup.last_duration_seconds,
+            last_error_message=last_errors.get(backup.id),
             is_active=backup.is_active,
             is_maintenance=backup.is_maintenance,
             maintenance_until=backup.maintenance_until,
@@ -343,32 +363,36 @@ async def delete_backup(
     await db.commit()
 
 
-@router.post("/{backup_id}/maintenance")
+class MaintenanceRequest(BaseModel):
+    is_maintenance: bool
+    maintenance_reason: Optional[str] = None
+    maintenance_until: Optional[datetime] = None
+
+
+@router.put("/{backup_id}/maintenance")
 async def toggle_maintenance(
     backup_id: int,
-    enable: bool,
-    until: Optional[datetime] = None,
-    reason: Optional[str] = None,
-    current_user: User = Depends(get_current_tech_user),
+    request: MaintenanceRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Active/désactive le mode maintenance d'une sauvegarde"""
+    """Active/desactive le mode maintenance d'une sauvegarde"""
     result = await db.execute(
         select(Backup).where(Backup.id == backup_id)
     )
     backup = result.scalar_one_or_none()
     
     if not backup:
-        raise HTTPException(status_code=404, detail="Sauvegarde non trouvée")
+        raise HTTPException(status_code=404, detail="Sauvegarde non trouvee")
     
-    backup.is_maintenance = enable
-    backup.maintenance_until = until if enable else None
-    backup.maintenance_reason = reason if enable else None
+    backup.is_maintenance = request.is_maintenance
+    backup.maintenance_until = request.maintenance_until if request.is_maintenance else None
+    backup.maintenance_reason = request.maintenance_reason if request.is_maintenance else None
     
     await db.commit()
     
     return {
-        "message": f"Mode maintenance {'activé' if enable else 'désactivé'}",
+        "message": f"Mode maintenance {'active' if request.is_maintenance else 'desactive'}",
         "is_maintenance": backup.is_maintenance
     }
 

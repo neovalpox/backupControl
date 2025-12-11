@@ -73,6 +73,7 @@ class ClientResponse(ClientBase):
     backups_ok: int = 0
     backups_warning: int = 0
     backups_critical: int = 0
+    last_backup_status: str = "unknown"
     
     class Config:
         from_attributes = True
@@ -105,6 +106,20 @@ async def list_clients(
         )
         backups = result.scalars().all()
         
+        backups_ok = sum(1 for b in backups if b.current_status == "ok")
+        backups_warning = sum(1 for b in backups if b.current_status in ["warning", "alert"])
+        backups_critical = sum(1 for b in backups if b.current_status in ["critical", "failed"])
+        
+        # Determiner le statut global du client
+        if backups_critical > 0:
+            last_backup_status = "failed"
+        elif backups_warning > 0:
+            last_backup_status = "warning"
+        elif backups_ok > 0:
+            last_backup_status = "success"
+        else:
+            last_backup_status = "unknown"
+        
         client_data = ClientResponse(
             id=client.id,
             name=client.name,
@@ -123,9 +138,10 @@ async def list_clients(
             created_at=client.created_at,
             updated_at=client.updated_at,
             backups_count=len(backups),
-            backups_ok=sum(1 for b in backups if b.current_status == "ok"),
-            backups_warning=sum(1 for b in backups if b.current_status in ["warning", "alert"]),
-            backups_critical=sum(1 for b in backups if b.current_status in ["critical", "failed"])
+            backups_ok=backups_ok,
+            backups_warning=backups_warning,
+            backups_critical=backups_critical,
+            last_backup_status=last_backup_status
         )
         response.append(client_data)
     
